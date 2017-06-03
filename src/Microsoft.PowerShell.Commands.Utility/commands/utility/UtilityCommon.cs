@@ -88,6 +88,11 @@ namespace Microsoft.PowerShell.Commands
         /// The file '{0}' could not be parsed as a PowerShell Data File.
         /// </summary>
         public static string CouldNotParseAsPowerShellDataFile { get { return UtilityCommonStrings.CouldNotParseAsPowerShellDataFile; } }
+
+        /// <summary>
+        ///
+        /// </summary>
+        public static string TypeNotSupported { get { return UtilityCommonStrings.TypeNotSupported; } }
     }
 
     /// <summary>
