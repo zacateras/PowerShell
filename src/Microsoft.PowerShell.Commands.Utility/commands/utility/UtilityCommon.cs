@@ -90,7 +90,7 @@ namespace Microsoft.PowerShell.Commands
         public static string CouldNotParseAsPowerShellDataFile { get { return UtilityCommonStrings.CouldNotParseAsPowerShellDataFile; } }
 
         /// <summary>
-        ///
+        /// '{0}' is not supported in this system.
         /// </summary>
         public static string TypeNotSupported { get { return UtilityCommonStrings.TypeNotSupported; } }
     }
