@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Internal;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Text;
 
 namespace Microsoft.PowerShell.Commands
 {
@@ -12,6 +14,7 @@ namespace Microsoft.PowerShell.Commands
     /// Class comment
     /// </summary>
     [Cmdlet(VerbsData.ConvertFrom, "SddlString", HelpUri = "https://go.microsoft.com/fwlink/?LinkId=623636", RemotingCapability = RemotingCapability.None)]
+    [OutputType(typeof(SddlStringInfo))]
     public sealed class ConvertFromSddlStringCommand : PSCmdlet
     {
         /// <summary>
@@ -26,48 +29,28 @@ namespace Microsoft.PowerShell.Commands
         [Parameter()]
         [ValidateSet(
             "FileSystemRights", "RegistryRights", "ActiveDirectoryRights",
-            "MutexRights", "SemaphoreRights", "CryptoKeyRights",
+            "MutexRights", "SemaphoreRights",
+#if !CORECLR
+            "CryptoKeyRights",
+#endif
             "EventWaitHandleRights")]
         public string Type { get; set; }
-
-        /// <summary>
-        /// Implements the BeginProcessing method for the ConvertFrom-SddlString command.
-        /// </summary>
-        protected override void BeginProcessing()
-        {
-#if CORECLR
-            if (Type == "CryptoKeyRights" || Type == "ActiveDirectoryRights")
-            {
-                string errorMessage = StringUtil.Format(UtilityResources.TypeNotSupported, Type);
-                ErrorRecord errorRecord = new ErrorRecord(
-                    new ArgumentException(errorMessage),
-                    "TypeNotSupported",
-                    ErrorCategory.InvalidArgument,
-                    null);
-
-                ThrowTerminatingError(errorRecord);
-            }
-#endif
-        }
 
         /// <summary>
         /// Implements the ProcessRecord method for the ConvertFrom-SddlString command.
         /// </summary>
         protected override void ProcessRecord()
         {
-            CommonSecurityDescriptor rawSecurityDescriptor = new CommonSecurityDescriptor(false, false, Sddl);
+            CommonSecurityDescriptor rawDescriptor = new CommonSecurityDescriptor(false, false, Sddl);
 
-            string owner = ConvertToNtAccount(rawSecurityDescriptor.Owner); 
-            string group = ConvertToNtAccount(rawSecurityDescriptor.Group);
-            List<string> discretionaryAcl = ConvertToAceString(rawSecurityDescriptor.DiscretionaryAcl, Type);
-            List<string> systemAcl = ConvertToAceString(rawSecurityDescriptor.SystemAcl, Type);
-
-            PSObject result = new PSObject();
-
-            result.Properties.Add(new PSNoteProperty("Owner", owner));
-            result.Properties.Add(new PSNoteProperty("Group", group));
-            result.Properties.Add(new PSNoteProperty("DiscretionaryAcl", discretionaryAcl));
-            result.Properties.Add(new PSNoteProperty("SystemAcl", systemAcl));
+            SddlStringInfo result = new SddlStringInfo
+            {
+                Owner = ConvertToNtAccount(rawDescriptor.Owner),
+                Group = ConvertToNtAccount(rawDescriptor.Group),
+                DiscretionaryAcl = ConvertToAceString(rawDescriptor.DiscretionaryAcl, Type),
+                SystemAcl = ConvertToAceString(rawDescriptor.SystemAcl, Type),
+                RawDescriptor = rawDescriptor
+            };
 
             WriteObject(result);
         }
@@ -96,9 +79,7 @@ namespace Microsoft.PowerShell.Commands
             {
                 { "FileSystemRights", typeof(System.Security.AccessControl.FileSystemRights) },
                 { "RegistryRights", typeof(System.Security.AccessControl.RegistryRights) },
-#if !CORECLR
                 { "ActiveDirectoryRights", typeof(System.DirectoryServices.ActiveDirectoryRights) },
-#endif
                 { "MutexRights", typeof(System.Security.AccessControl.MutexRights) },
                 { "SemaphoreRights", typeof(System.Security.AccessControl.SemaphoreRights) },
 #if !CORECLR
@@ -148,24 +129,27 @@ namespace Microsoft.PowerShell.Commands
         }
 
         /// <summary>
-        /// Converts an ACE into a string representation
+        /// Converts an ACL into a string representation
         /// </summary>
         private List<string> ConvertToAceString(CommonAcl acl, string type)
         {
             List<string> aceStrings = new List<string>();
+            StringBuilder aceSb = new StringBuilder();
 
             foreach (var ace in acl.OfType<KnownAce>())
             {
-                string aceString = ConvertToNtAccount(ace.SecurityIdentifier) + ": ";
+                aceSb.Append(ConvertToNtAccount(ace.SecurityIdentifier));
+                aceSb.Append(": ");
 
                 if (ace is QualifiedAce qualifiedAce)
                 {
-                    aceString += qualifiedAce.AceQualifier;
+                    aceSb.Append(qualifiedAce.AceQualifier.ToString());
                 }
 
                 if (ace.AceFlags != AceFlags.None)
                 {
-                    aceString += " " + ace.AceFlags;
+                    aceSb.Append(" ");
+                    aceSb.Append(ace.AceFlags.ToString());
                 }
 
                 if (ace.AccessMask != default(int))
@@ -174,14 +158,45 @@ namespace Microsoft.PowerShell.Commands
 
                     if (foundAccess.Count > 0)
                     {
-                        aceString += $" ({string.Join(", ", foundAccess)})";
+                        aceSb.Append($" ({string.Join(", ", foundAccess)})");
                     }
                 }
 
-                aceStrings.Add(aceString);
+                aceStrings.Add(aceSb.ToString());
+                aceSb.Clear();
             }
 
             return aceStrings;
         }
+    }
+
+    /// <summary>
+    /// Holds descriptive information for SDDL string
+    /// </summary>
+    public class SddlStringInfo
+    {
+        /// <summary>
+        /// Owner's account name
+        public string Owner { get; set; }
+
+        /// <summary>
+        /// Owner's primary group name
+        /// </summary>
+        public string Group { get; set; }
+
+        /// <summary>
+        /// DACL string representation
+        /// </summery>
+        public List<string> DiscretionaryAcl { get; set; }
+
+        /// <summary>
+        /// SACL string representation
+        /// </summery>
+        public List<string> SystemAcl { get; set; }
+
+        /// <summary>
+        /// Raw security descriptor
+        /// </summery>
+        public CommonSecurityDescriptor RawDescriptor { get; set; }
     }
 }

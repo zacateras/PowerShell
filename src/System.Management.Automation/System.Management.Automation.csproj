@@ -25,7 +25,6 @@
     <PackageReference Include="System.Security.AccessControl" Version="4.4.0-preview1-25302-01" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="4.4.0-preview1-25302-01" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="4.4.0-preview1-25302-01" />
-    <PackageReference Include="System.Threading.AccessControl" Version="4.4.0-preview1-25302-01" />
     <PackageReference Include="Microsoft.Management.Infrastructure" Version="1.0.0-alpha*" />
   </ItemGroup>
 
